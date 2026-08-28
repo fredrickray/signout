@@ -1,0 +1,176 @@
+@import "tailwindcss";
+
+:root {
+  --ink: #0a1628;
+  --ink-soft: #1c2e44;
+  --parchment: #f4efe6;
+  --cloth: #faf8f4;
+  --gold: #b8952a;
+  --gold-soft: #d4b85c;
+  --teal: #1a6b5c;
+  --teal-deep: #0f4a40;
+  --coral: #c45c26;
+  --muted: #6b7280;
+  --line: rgba(10, 22, 40, 0.1);
+  --shadow: 0 24px 64px rgba(10, 22, 40, 0.12);
+  --background: var(--parchment);
+  --foreground: var(--ink);
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-ink: var(--ink);
+  --color-ink-soft: var(--ink-soft);
+  --color-parchment: var(--parchment);
+  --color-cloth: var(--cloth);
+  --color-gold: var(--gold);
+  --color-gold-soft: var(--gold-soft);
+  --color-teal: var(--teal);
+  --color-teal-deep: var(--teal-deep);
+  --color-coral: var(--coral);
+  --color-muted: var(--muted);
+  --color-line: var(--line);
+  --font-sans: var(--font-body);
+  --font-display: var(--font-display);
+  --font-script: var(--font-script);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-body), system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+::selection {
+  background: color-mix(in srgb, var(--teal) 28%, white);
+  color: var(--ink);
+}
+
+.font-display {
+  font-family: var(--font-display), Georgia, serif;
+  font-optical-sizing: auto;
+}
+
+.font-script {
+  font-family: var(--font-script), cursive;
+}
+
+.grain {
+  position: relative;
+}
+
+.grain::before {
+  content: "";
+  pointer-events: none;
+  position: absolute;
+  inset: 0;
+  opacity: 0.035;
+  mix-blend-mode: multiply;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  z-index: 1;
+}
+
+.hero-wash {
+  background:
+    radial-gradient(ellipse 80% 60% at 70% 40%, rgba(184, 149, 42, 0.18), transparent 55%),
+    radial-gradient(ellipse 70% 50% at 15% 20%, rgba(26, 107, 92, 0.14), transparent 50%),
+    radial-gradient(ellipse 50% 40% at 50% 100%, rgba(196, 92, 38, 0.08), transparent 45%),
+    linear-gradient(165deg, #f7f3ec 0%, #efe8db 45%, #e8f0ed 100%);
+}
+
+.btn-primary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  border-radius: 9999px;
+  background: var(--ink);
+  color: var(--cloth);
+  font-weight: 600;
+  padding: 0.85rem 1.5rem;
+  transition: transform 180ms ease, background 180ms ease, box-shadow 180ms ease;
+  box-shadow: 0 10px 28px rgba(10, 22, 40, 0.18);
+}
+
+.btn-primary:hover {
+  background: var(--teal-deep);
+  transform: translateY(-1px);
+}
+
+.btn-ghost {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  border-radius: 9999px;
+  border: 1.5px solid var(--ink);
+  color: var(--ink);
+  font-weight: 600;
+  padding: 0.85rem 1.5rem;
+  background: transparent;
+  transition: background 180ms ease, transform 180ms ease;
+}
+
+.btn-ghost:hover {
+  background: rgba(10, 22, 40, 0.04);
+  transform: translateY(-1px);
+}
+
+.btn-teal {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  border-radius: 9999px;
+  background: var(--teal);
+  color: white;
+  font-weight: 600;
+  padding: 0.85rem 1.5rem;
+  transition: transform 180ms ease, background 180ms ease;
+  box-shadow: 0 10px 28px rgba(26, 107, 92, 0.25);
+}
+
+.btn-teal:hover {
+  background: var(--teal-deep);
+  transform: translateY(-1px);
+}
+
+@keyframes float-soft {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-8px);
+  }
+}
+
+.float-soft {
+  animation: float-soft 5.5s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+
+  .float-soft {
+    animation: none;
+  }
+
+  .btn-primary,
+  .btn-ghost,
+  .btn-teal {
+    transition: none;
+  }
+}
