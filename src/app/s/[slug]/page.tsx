@@ -18,7 +18,11 @@ import {
   type ShirtSignature,
 } from "@/lib/types";
 
-type Hit = { side: ShirtSide; u: number; v: number };
+type Hit = {
+  side: ShirtSide;
+  position: [number, number, number];
+  normal: [number, number, number];
+};
 
 function profileForSlug(slug: string): GraduateProfile {
   if (slug === DEMO_GRADUATE.slug) return DEMO_GRADUATE;
@@ -80,8 +84,8 @@ export default function ShareSignPage() {
       message: message.trim() || undefined,
       color,
       side: pendingHit.side,
-      u: pendingHit.u,
-      v: pendingHit.v,
+      position: pendingHit.position,
+      normal: pendingHit.normal,
       imageData: ink,
       scale: 1,
       rotation: (Math.random() * 16 - 8) | 0,

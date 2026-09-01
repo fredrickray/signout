@@ -1,17 +1,21 @@
 export type ShirtSide = "front" | "back";
 
+export type Vec3 = [number, number, number];
+
 export type ShirtSignature = {
   id: string;
   name: string;
   message?: string;
   color: string;
   side: ShirtSide;
-  /** UV position on the shirt texture (0–1) */
-  u: number;
-  v: number;
+  /** Mesh-local position where the signature was placed */
+  position: Vec3;
+  /** Mesh-local surface normal at placement */
+  normal: Vec3;
   /** Drawn signature as a PNG data URL */
   imageData: string;
   scale: number;
+  /** Extra twist around the surface normal (degrees) */
   rotation: number;
   createdAt: string;
 };
@@ -42,3 +46,5 @@ export const SIGNATURE_COLORS = [
   "#9f1239",
   "#b8952a",
 ] as const;
+
+export const SHIRT_MODEL_URL = "/models/graduation-shirt.glb";

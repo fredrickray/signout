@@ -1,42 +1,63 @@
 import * as THREE from "three";
 
-/** T-shirt silhouette in local XY (centered, roughly unit height). */
+/** T-shirt silhouette in local XY (centered). */
 export function createShirtShape() {
   const s = new THREE.Shape();
 
-  // Coordinates: x left→right, y bottom→top. Origin at shirt center.
-  s.moveTo(-0.55, 0.55);
-  s.lineTo(-0.95, 0.35); // left sleeve outer
-  s.lineTo(-0.95, 0.05);
-  s.lineTo(-0.55, 0.22); // left armpit
-  s.lineTo(-0.52, -0.85); // left hem
-  s.lineTo(0.52, -0.85); // right hem
-  s.lineTo(0.55, 0.22); // right armpit
-  s.lineTo(0.95, 0.05);
-  s.lineTo(0.95, 0.35); // right sleeve outer
-  s.lineTo(0.55, 0.55);
-  s.quadraticCurveTo(0.28, 0.72, 0.18, 0.78); // right neck
-  s.quadraticCurveTo(0, 0.68, -0.18, 0.78); // neck dip
-  s.quadraticCurveTo(-0.28, 0.72, -0.55, 0.55);
+  s.moveTo(-0.52, 0.52);
+  s.lineTo(-0.98, 0.32);
+  s.lineTo(-0.98, 0.02);
+  s.lineTo(-0.52, 0.2);
+  s.lineTo(-0.5, -0.92);
+  s.lineTo(0.5, -0.92);
+  s.lineTo(0.52, 0.2);
+  s.lineTo(0.98, 0.02);
+  s.lineTo(0.98, 0.32);
+  s.lineTo(0.52, 0.52);
+  s.quadraticCurveTo(0.3, 0.7, 0.16, 0.78);
+  s.quadraticCurveTo(0, 0.66, -0.16, 0.78);
+  s.quadraticCurveTo(-0.3, 0.7, -0.52, 0.52);
   s.closePath();
 
   return s;
 }
 
-export function createShirtGeometry(depth = 0.12) {
+/** Map shape bounds → full 0–1 UVs so canvas textures fit the silhouette. */
+export function createShirtPanelGeometry() {
+  const shape = createShirtShape();
+  const geometry = new THREE.ShapeGeometry(shape, 48);
+  geometry.computeBoundingBox();
+
+  const bbox = geometry.boundingBox!;
+  const sizeX = bbox.max.x - bbox.min.x || 1;
+  const sizeY = bbox.max.y - bbox.min.y || 1;
+  const pos = geometry.attributes.position;
+  const uv = geometry.attributes.uv;
+
+  for (let i = 0; i < pos.count; i++) {
+    const x = pos.getX(i);
+    const y = pos.getY(i);
+    // u: left→right, v: bottom→top in shape space → flip v for image space (top=0)
+    uv.setXY(
+      i,
+      (x - bbox.min.x) / sizeX,
+      (y - bbox.min.y) / sizeY,
+    );
+  }
+  uv.needsUpdate = true;
+  geometry.computeVertexNormals();
+  return geometry;
+}
+
+/** Thin rim so the shirt reads as having thickness when rotated. */
+export function createShirtRimGeometry(depth = 0.09) {
   const shape = createShirtShape();
   const geometry = new THREE.ExtrudeGeometry(shape, {
     depth,
-    bevelEnabled: true,
-    bevelThickness: 0.02,
-    bevelSize: 0.015,
-    bevelSegments: 2,
-    curveSegments: 12,
+    bevelEnabled: false,
+    curveSegments: 24,
   });
-
   geometry.center();
-  // Remap UVs so front face uses full 0–1 and back face uses full 0–1 separately
-  // ExtrudeGeometry: groups are front, back, sides — we assign custom UVs via raycasting side
   geometry.computeVertexNormals();
   return geometry;
 }
