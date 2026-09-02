@@ -8,7 +8,7 @@ import SiteFooter from "@/components/landing/SiteFooter";
 
 export default function HomePage() {
   return (
-    <div className="grain hero-wash min-h-screen">
+    <div className="hero-wash min-h-screen bg-white">
       <SiteHeader />
       <main>
         <Hero />

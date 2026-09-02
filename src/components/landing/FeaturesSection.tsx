@@ -1,22 +1,23 @@
 import {
+  Frame,
   Gift,
+  ImageIcon,
+  PenLine,
   QrCode,
   Shirt,
-  PenLine,
-  ImageIcon,
-  Frame,
 } from "lucide-react";
 
 const features = [
   {
     icon: Shirt,
-    title: "3D Digital T-Shirt",
-    body: "A rotatable, mobile-first shirt — front and back — with signatures mapped to the fabric.",
+    title: "Digital T-Shirt",
+    body: "A realistic, mobile-first interactive shirt — front and back — for every graduate.",
+    spotlight: true,
   },
   {
     icon: PenLine,
     title: "Real Signatures",
-    body: "Visitors draw with finger, mouse, or stylus. Every stroke lives on your shirt.",
+    body: "Visitors draw with finger, mouse, or stylus. Every signature lives on your shirt.",
   },
   {
     icon: Gift,
@@ -42,31 +43,41 @@ const features = [
 
 export default function FeaturesSection() {
   return (
-    <section id="features" className="px-5 py-20 md:px-10">
+    <section id="features" className="bg-white px-5 py-20 md:px-10 md:py-28">
       <div className="mx-auto max-w-6xl">
-        <p className="text-xs font-semibold uppercase tracking-[0.2em] text-gold">
+        <p className="text-xs font-semibold uppercase tracking-[0.22em] text-muted">
           Everything you need
         </p>
         <h2 className="mt-3 max-w-2xl font-display text-4xl leading-tight text-ink md:text-5xl">
-          Built for the moment that{" "}
-          <span className="italic text-coral">only happens once.</span>
+          Built for the moment that
+          <br />
+          <span className="italic text-gradient-gold">only happens once.</span>
         </h2>
-        <p className="mt-4 max-w-xl text-ink-soft">
+        <p className="mt-5 max-w-xl text-muted md:text-lg">
           A premium toolkit for graduates — designed to feel as meaningful as
           the day itself.
         </p>
 
-        <div className="mt-12 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {features.map(({ icon: Icon, title, body }) => (
+        <div className="mt-14 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+          {features.map(({ icon: Icon, title, body, spotlight }) => (
             <article
               key={title}
-              className="rounded-3xl border border-line bg-cloth p-6 transition hover:-translate-y-0.5 hover:shadow-[var(--shadow)]"
+              className={`relative overflow-hidden rounded-[1.75rem] border border-line bg-white p-7 shadow-[var(--shadow)] transition hover:-translate-y-0.5 hover:shadow-[var(--shadow-lg)] ${
+                spotlight ? "ring-1 ring-brand/15" : ""
+              }`}
             >
-              <div className="flex h-11 w-11 items-center justify-center rounded-full bg-teal/10 text-teal">
+              {spotlight ? (
+                <div className="pointer-events-none absolute -left-10 -top-10 h-40 w-40 rounded-full bg-brand/20 blur-3xl" />
+              ) : null}
+              <div className="relative flex h-12 w-12 items-center justify-center rounded-full bg-brand text-white shadow-[0_8px_20px_rgba(109,40,217,0.28)]">
                 <Icon className="h-5 w-5" />
               </div>
-              <h3 className="mt-5 font-display text-xl text-ink">{title}</h3>
-              <p className="mt-2 text-sm leading-relaxed text-muted">{body}</p>
+              <h3 className="relative mt-6 text-lg font-bold text-ink">
+                {title}
+              </h3>
+              <p className="relative mt-2 text-sm leading-relaxed text-muted">
+                {body}
+              </p>
             </article>
           ))}
         </div>
