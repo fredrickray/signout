@@ -8,6 +8,7 @@ import ShirtViewerLazy from "@/components/shirt/ShirtViewerLazy";
 import SignaturePad from "@/components/shirt/SignaturePad";
 import {
   addSignature,
+  composeNamedSignatureImage,
   loadSignatures,
 } from "@/lib/signatures";
 import {
@@ -74,9 +75,16 @@ export default function ShareSignPage() {
     setMessage("");
   };
 
-  const submit = (e: FormEvent) => {
+  const submit = async (e: FormEvent) => {
     e.preventDefault();
     if (!pendingHit || !ink || !name.trim()) return;
+
+    const imageData = await composeNamedSignatureImage({
+      name: name.trim(),
+      message: message.trim() || undefined,
+      inkDataUrl: ink,
+      color,
+    });
 
     const next: ShirtSignature = {
       id: crypto.randomUUID(),
@@ -86,7 +94,7 @@ export default function ShareSignPage() {
       side: pendingHit.side,
       position: pendingHit.position,
       normal: pendingHit.normal,
-      imageData: ink,
+      imageData,
       scale: 1,
       rotation: (Math.random() * 16 - 8) | 0,
       createdAt: new Date().toISOString(),

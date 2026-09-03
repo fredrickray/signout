@@ -196,14 +196,14 @@ function SignatureInk({ signature }: { signature: ShirtSignature }) {
     map.needsUpdate = true;
   }, [map]);
 
-  const w = 0.28 * signature.scale;
+  const w = 0.3 * signature.scale;
   return (
     <SurfaceInk
       position={signature.position}
       normal={signature.normal}
       twist={signature.rotation}
       width={w}
-      height={w * 0.55}
+      height={w * 0.72}
       map={map}
     />
   );
