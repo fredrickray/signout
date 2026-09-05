@@ -21,6 +21,10 @@ export const metadata: Metadata = {
   title: "Sign-Out — Your Milestone. Your Story. Forever on Fabric.",
   description:
     "Collect signatures, messages, prayers, and gifts on a rotatable 3D keepsake — for graduation and NYSC POP.",
+  icons: {
+    icon: [{ url: "/favicon.svg", type: "image/svg+xml" }],
+    apple: [{ url: "/favicon.svg" }],
+  },
 };
 
 export default function RootLayout({
