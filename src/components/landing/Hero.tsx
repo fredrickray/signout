@@ -2,35 +2,25 @@
 
 import Link from "next/link";
 import { ArrowRight } from "lucide-react";
-import ShirtViewerLazy from "@/components/shirt/ShirtViewerLazy";
-import { DEMO_GRADUATE, type ShirtSignature } from "@/lib/types";
-import { getSeedSignatures } from "@/lib/signatures";
-import { useEffect, useState } from "react";
+import { DEMO_GRADUATE } from "@/lib/types";
+import HeroCarousel from "./HeroCarousel";
 
 export default function Hero() {
-  const [signatures, setSignatures] = useState<ShirtSignature[]>([]);
-
-  useEffect(() => {
-    setSignatures(getSeedSignatures());
-  }, []);
-
   return (
     <section className="relative overflow-hidden px-5 pb-16 pt-4 md:px-10 md:pb-24">
       <div className="mx-auto grid max-w-6xl items-center gap-10 lg:grid-cols-[1.05fr_0.95fr]">
         <div className="relative z-10 max-w-xl">
-          <p className="mb-4 text-xs font-semibold uppercase tracking-[0.22em] text-teal">
-            Sign. Share. Remember.
-          </p>
           <h1 className="font-display text-[2.75rem] leading-[1.05] tracking-tight text-ink sm:text-5xl md:text-6xl">
             Your Milestone.
             <br />
             Your Story.
             <br />
-            <span className="italic text-teal">Forever on fabric.</span>
+            <span className="italic text-teal">Forever Preserved.</span>
           </h1>
           <p className="mt-6 max-w-md text-base leading-relaxed text-ink-soft md:text-lg">
-            From graduation to NYSC POP — collect signatures, prayers, and gifts
-            on a real 3D keepsake friends can spin, sign, and cherish.
+            From your graduation to your NYSC POP, Sign-Out helps you preserve
+            the moments that matter. Collect signatures, messages, prayers,
+            memories, and gifts from family and friends — anywhere in the world.
           </p>
           <div className="mt-8 flex flex-wrap items-center gap-3">
             <Link href="/login?tab=create" className="btn-primary">
@@ -60,19 +50,7 @@ export default function Hero() {
           </dl>
         </div>
 
-        <div className="relative">
-          <div className="float-soft relative mx-auto aspect-[4/5] w-full max-w-md overflow-hidden rounded-[2rem] border border-white/60 bg-cloth/50 shadow-[var(--shadow)] backdrop-blur-sm">
-            <ShirtViewerLazy
-              profile={DEMO_GRADUATE}
-              signatures={signatures}
-              autoRotate
-              hint="Drag to rotate · Front & back"
-            />
-            <div className="pointer-events-none absolute left-4 top-4 z-10 rounded-full bg-cloth/90 px-3 py-1.5 text-xs font-semibold text-ink shadow-sm backdrop-blur">
-              🎓 Graduation Sign-Out
-            </div>
-          </div>
-        </div>
+        <HeroCarousel />
       </div>
     </section>
   );

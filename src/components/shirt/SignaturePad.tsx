@@ -9,6 +9,49 @@ type SignaturePadProps = {
   onChange: (dataUrl: string | null) => void;
 };
 
+/** Crop transparent padding so stamps aren't tiny ink in a huge empty canvas. */
+function exportCropped(canvas: HTMLCanvasElement): string | null {
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return null;
+  const { width, height } = canvas;
+  const pixels = ctx.getImageData(0, 0, width, height).data;
+
+  let minX = width;
+  let minY = height;
+  let maxX = -1;
+  let maxY = -1;
+
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      const a = pixels[(y * width + x) * 4 + 3];
+      if (a > 8) {
+        if (x < minX) minX = x;
+        if (y < minY) minY = y;
+        if (x > maxX) maxX = x;
+        if (y > maxY) maxY = y;
+      }
+    }
+  }
+
+  if (maxX < 0) return null;
+
+  const pad = 16;
+  minX = Math.max(0, minX - pad);
+  minY = Math.max(0, minY - pad);
+  maxX = Math.min(width - 1, maxX + pad);
+  maxY = Math.min(height - 1, maxY + pad);
+
+  const w = maxX - minX + 1;
+  const h = maxY - minY + 1;
+  const out = document.createElement("canvas");
+  out.width = w;
+  out.height = h;
+  const outCtx = out.getContext("2d");
+  if (!outCtx) return null;
+  outCtx.drawImage(canvas, minX, minY, w, h, 0, 0, w, h);
+  return out.toDataURL("image/png");
+}
+
 export default function SignaturePad({
   color,
   onColorChange,
@@ -19,6 +62,14 @@ export default function SignaturePad({
   const [hasInk, setHasInk] = useState(false);
 
   const getCtx = () => canvasRef.current?.getContext("2d") ?? null;
+
+  const publish = useCallback(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const data = exportCropped(canvas);
+    setHasInk(Boolean(data));
+    onChange(data);
+  }, [onChange]);
 
   const clear = useCallback(() => {
     const canvas = canvasRef.current;
@@ -34,14 +85,14 @@ export default function SignaturePad({
     if (!canvas) return;
     const ratio = Math.min(window.devicePixelRatio || 1, 2);
     const rect = canvas.getBoundingClientRect();
-    canvas.width = rect.width * ratio;
-    canvas.height = rect.height * ratio;
+    canvas.width = Math.max(1, Math.floor(rect.width * ratio));
+    canvas.height = Math.max(1, Math.floor(rect.height * ratio));
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
-    ctx.scale(ratio, ratio);
+    ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
     ctx.lineCap = "round";
     ctx.lineJoin = "round";
-    ctx.lineWidth = 2.6;
+    ctx.lineWidth = 3.2;
   }, []);
 
   const pointerPos = (e: React.PointerEvent<HTMLCanvasElement>) => {
@@ -79,10 +130,7 @@ export default function SignaturePad({
   const finish = (e: React.PointerEvent<HTMLCanvasElement>) => {
     if (!drawing.current) return;
     drawing.current = false;
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    setHasInk(true);
-    onChange(canvas.toDataURL("image/png"));
+    publish();
     try {
       e.currentTarget.releasePointerCapture(e.pointerId);
     } catch {
@@ -122,16 +170,16 @@ export default function SignaturePad({
 
       <canvas
         ref={canvasRef}
-        className="h-40 w-full touch-none rounded-2xl border border-line bg-cloth"
+        className="h-44 w-full touch-none rounded-2xl border border-line bg-white"
         style={{
           backgroundImage:
-            "linear-gradient(rgba(10,22,40,0.04) 1px, transparent 1px), linear-gradient(90deg, rgba(10,22,40,0.04) 1px, transparent 1px)",
+            "linear-gradient(rgba(10,22,40,0.045) 1px, transparent 1px), linear-gradient(90deg, rgba(10,22,40,0.045) 1px, transparent 1px)",
           backgroundSize: "16px 16px",
         }}
         onPointerDown={onPointerDown}
         onPointerMove={onPointerMove}
         onPointerUp={finish}
-        onPointerLeave={finish}
+        onPointerCancel={finish}
       />
 
       {!hasInk ? (

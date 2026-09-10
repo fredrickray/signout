@@ -2,28 +2,32 @@
 
 import {
   Suspense,
-  useCallback,
   useEffect,
+  useLayoutEffect,
   useMemo,
-  useRef,
   useState,
 } from "react";
-import { Canvas, ThreeEvent, useFrame, useThree } from "@react-three/fiber";
+import { Canvas, ThreeEvent, useThree } from "@react-three/fiber";
 import {
   ContactShadows,
   Environment,
   OrbitControls,
-  RoundedBox,
+  useGLTF,
+  useTexture,
 } from "@react-three/drei";
 import * as THREE from "three";
-import { composeShirtTexture } from "@/lib/compose-texture";
-import { createShirtGeometry } from "@/lib/shirt-geometry";
-import type { GraduateProfile, ShirtSide, ShirtSignature } from "@/lib/types";
+import type {
+  GraduateProfile,
+  ShirtSide,
+  ShirtSignature,
+  Vec3,
+} from "@/lib/types";
+import { SHIRT_MODEL_URL } from "@/lib/types";
 
-type HitPayload = {
+export type HitPayload = {
   side: ShirtSide;
-  u: number;
-  v: number;
+  position: Vec3;
+  normal: Vec3;
 };
 
 type ShirtMeshProps = {
@@ -32,148 +36,295 @@ type ShirtMeshProps = {
   signMode: boolean;
   pendingHit: HitPayload | null;
   onHit: (hit: HitPayload) => void;
-  autoRotate?: boolean;
 };
 
-function ShirtMesh({
+const SIGNABLE = new Set([
+  "Continuous_cotton_shirt",
+  "Bottom_hem",
+  "Crew_neck_ribbing",
+]);
+
+/** DecalGeometry crashes without a proper index — prepare meshes safely. */
+function prepareMeshGeometry(mesh: THREE.Mesh) {
+  const geometry = mesh.geometry;
+  if (!geometry.getAttribute("normal")) {
+    geometry.computeVertexNormals();
+  }
+  // Three DecalGeometry treats `undefined` index as indexed and crashes.
+  if (geometry.index == null) {
+    geometry.setIndex(null);
+  }
+}
+
+function createHeaderCanvas(profile: GraduateProfile) {
+  const canvas = document.createElement("canvas");
+  canvas.width = 1024;
+  canvas.height = 512;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return canvas;
+
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  ctx.textAlign = "center";
+  ctx.fillStyle = "#0a1628";
+  ctx.font = "700 92px Georgia, serif";
+  ctx.fillText(profile.name, 512, 150);
+  ctx.font = "500 36px system-ui, sans-serif";
+  ctx.fillStyle = "#334155";
+  ctx.fillText(profile.school, 512, 220);
+  ctx.font = "400 30px system-ui, sans-serif";
+  ctx.fillStyle = "#64748b";
+  ctx.fillText(profile.faculty, 512, 270);
+  ctx.font = "700 56px Georgia, serif";
+  ctx.fillStyle = "#0a1628";
+  ctx.fillText(profile.classOf, 512, 350);
+  ctx.strokeStyle = "rgba(184, 149, 42, 0.7)";
+  ctx.lineWidth = 3;
+  ctx.beginPath();
+  ctx.moveTo(300, 390);
+  ctx.lineTo(724, 390);
+  ctx.stroke();
+  return canvas;
+}
+
+function createHighlightCanvas() {
+  const canvas = document.createElement("canvas");
+  canvas.width = 256;
+  canvas.height = 256;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return canvas;
+  ctx.clearRect(0, 0, 256, 256);
+  ctx.strokeStyle = "rgba(26, 107, 92, 0.95)";
+  ctx.lineWidth = 12;
+  ctx.setLineDash([16, 10]);
+  ctx.beginPath();
+  ctx.roundRect(28, 28, 200, 200, 24);
+  ctx.stroke();
+  return canvas;
+}
+
+function useCanvasTexture(factory: () => HTMLCanvasElement, deps: unknown[]) {
+  const [texture, setTexture] = useState<THREE.CanvasTexture | null>(null);
+
+  useEffect(() => {
+    const canvas = factory();
+    const tex = new THREE.CanvasTexture(canvas);
+    tex.colorSpace = THREE.SRGBColorSpace;
+    tex.anisotropy = 8;
+    tex.needsUpdate = true;
+    setTexture((prev) => {
+      prev?.dispose();
+      return tex;
+    });
+    return () => {
+      tex.dispose();
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, deps);
+
+  return texture;
+}
+
+function orientationFromNormal(normal: Vec3, twistDeg = 0) {
+  const n = new THREE.Vector3(...normal).normalize();
+  const quat = new THREE.Quaternion().setFromUnitVectors(
+    new THREE.Vector3(0, 0, 1),
+    n,
+  );
+  if (twistDeg) {
+    quat.multiply(
+      new THREE.Quaternion().setFromAxisAngle(n, (twistDeg * Math.PI) / 180),
+    );
+  }
+  return quat;
+}
+
+/** Surface sticker — works without mesh UVs (unlike THREE.DecalGeometry). */
+function SurfaceInk({
+  position,
+  normal,
+  twist = 0,
+  width,
+  height,
+  map,
+  renderOrder = 2,
+}: {
+  position: Vec3;
+  normal: Vec3;
+  twist?: number;
+  width: number;
+  height: number;
+  map: THREE.Texture;
+  renderOrder?: number;
+}) {
+  const quaternion = useMemo(
+    () => orientationFromNormal(normal, twist),
+    [normal, twist],
+  );
+
+  // Nudge along the normal so ink sits on top of the fabric
+  const lifted = useMemo(() => {
+    const n = new THREE.Vector3(...normal).normalize();
+    return new THREE.Vector3(...position).addScaledVector(n, 0.004);
+  }, [position, normal]);
+
+  return (
+    <mesh
+      position={lifted}
+      quaternion={quaternion}
+      renderOrder={renderOrder}
+      raycast={() => null}
+    >
+      <planeGeometry args={[width, height]} />
+      <meshStandardMaterial
+        map={map}
+        transparent
+        depthWrite={false}
+        polygonOffset
+        polygonOffsetFactor={-4}
+        roughness={1}
+        metalness={0}
+        side={THREE.DoubleSide}
+      />
+    </mesh>
+  );
+}
+
+function SignatureInk({ signature }: { signature: ShirtSignature }) {
+  const map = useTexture(signature.imageData);
+  useLayoutEffect(() => {
+    map.colorSpace = THREE.SRGBColorSpace;
+    map.needsUpdate = true;
+  }, [map]);
+
+  const w = 0.28 * signature.scale;
+  return (
+    <SurfaceInk
+      position={signature.position}
+      normal={signature.normal}
+      twist={signature.rotation}
+      width={w}
+      height={w * 0.55}
+      map={map}
+    />
+  );
+}
+
+function GraduationShirtModel({
   profile,
   signatures,
   signMode,
   pendingHit,
   onHit,
-  autoRotate = false,
 }: ShirtMeshProps) {
-  const group = useRef<THREE.Group>(null);
-  const frontMat = useRef<THREE.MeshStandardMaterial>(null);
-  const backMat = useRef<THREE.MeshStandardMaterial>(null);
-  const [frontMap, setFrontMap] = useState<THREE.CanvasTexture | null>(null);
-  const [backMap, setBackMap] = useState<THREE.CanvasTexture | null>(null);
+  const { scene } = useGLTF(SHIRT_MODEL_URL);
 
-  const geometry = useMemo(() => createShirtGeometry(0.14), []);
+  const { root, shirtMesh } = useMemo((): {
+    root: THREE.Group | THREE.Object3D;
+    shirtMesh: THREE.Mesh | null;
+  } => {
+    const cloned = scene.clone(true);
+    let shirt: THREE.Mesh | null = null;
 
-  useEffect(() => {
-    let cancelled = false;
-
-    async function rebuild() {
-      const frontCanvas = await composeShirtTexture(
-        "front",
-        profile,
-        signatures,
-        pendingHit?.side === "front"
-          ? { u: pendingHit.u, v: pendingHit.v }
-          : null,
-      );
-      const backCanvas = await composeShirtTexture(
-        "back",
-        profile,
-        signatures,
-        pendingHit?.side === "back"
-          ? { u: pendingHit.u, v: pendingHit.v }
-          : null,
-      );
-
-      if (cancelled) return;
-
-      const frontTex = new THREE.CanvasTexture(frontCanvas);
-      frontTex.colorSpace = THREE.SRGBColorSpace;
-      frontTex.anisotropy = 8;
-      frontTex.needsUpdate = true;
-
-      const backTex = new THREE.CanvasTexture(backCanvas);
-      backTex.colorSpace = THREE.SRGBColorSpace;
-      backTex.anisotropy = 8;
-      backTex.needsUpdate = true;
-
-      setFrontMap((prev) => {
-        prev?.dispose();
-        return frontTex;
-      });
-      setBackMap((prev) => {
-        prev?.dispose();
-        return backTex;
-      });
-    }
-
-    void rebuild();
-    return () => {
-      cancelled = true;
-    };
-  }, [profile, signatures, pendingHit]);
-
-  useFrame((_, delta) => {
-    if (autoRotate && group.current && !signMode) {
-      group.current.rotation.y += delta * 0.35;
-    }
-  });
-
-  const handlePointerDown = useCallback(
-    (event: ThreeEvent<PointerEvent>) => {
-      if (!signMode) return;
-      event.stopPropagation();
-
-      const normal = event.face?.normal.clone();
-      if (!normal) return;
-      normal.transformDirection(event.object.matrixWorld);
-      const side: ShirtSide = normal.z >= 0 ? "front" : "back";
-
-      // Prefer real mesh UVs so the stamp lands exactly where the user taps
-      let u: number;
-      let v: number;
-      if (event.uv) {
-        u = THREE.MathUtils.clamp(event.uv.x, 0.08, 0.92);
-        v = THREE.MathUtils.clamp(1 - event.uv.y, 0.35, 0.9);
-        // Back face UVs are often mirrored on extruded shapes
-        if (side === "back") {
-          u = 1 - u;
-        }
-      } else {
-        const box = new THREE.Box3().setFromObject(event.object);
-        const size = new THREE.Vector3();
-        const center = new THREE.Vector3();
-        box.getSize(size);
-        box.getCenter(center);
-        u = THREE.MathUtils.clamp(
-          (event.point.x - (center.x - size.x / 2)) / size.x,
-          0.08,
-          0.92,
-        );
-        v = THREE.MathUtils.clamp(
-          1 - (event.point.y - (center.y - size.y / 2)) / size.y,
-          0.35,
-          0.9,
-        );
+    const polishMaterial = (mat: THREE.Material, meshName: string) => {
+      if (!(mat instanceof THREE.MeshStandardMaterial)) return mat;
+      const m = mat.clone();
+      const name = (m.name || "").toLowerCase();
+      if (name.includes("cotton") || SIGNABLE.has(meshName)) {
+        m.color.set("#f7f4ef");
+        m.roughness = 0.9;
+        m.metalness = 0;
+        m.envMapIntensity = 0.5;
       }
+      if (name.includes("gold")) {
+        m.metalness = 0.75;
+        m.roughness = 0.26;
+        m.envMapIntensity = 1.15;
+      }
+      if (name.includes("cap") || name.includes("black")) {
+        m.color.set("#17191f");
+        m.roughness = 0.52;
+      }
+      m.needsUpdate = true;
+      return m;
+    };
 
-      onHit({ side, u, v });
-    },
-    [onHit, signMode],
+    cloned.traverse((obj) => {
+      if (!(obj instanceof THREE.Mesh)) return;
+      prepareMeshGeometry(obj);
+      obj.castShadow = true;
+      obj.receiveShadow = true;
+
+      if (obj.name === "Continuous_cotton_shirt") shirt = obj;
+
+      obj.material = Array.isArray(obj.material)
+        ? obj.material.map((m) => polishMaterial(m, obj.name))
+        : polishMaterial(obj.material, obj.name);
+    });
+
+    return { root: cloned, shirtMesh: shirt };
+  }, [scene]);
+
+  const centerOffset = useMemo(() => {
+    const box = new THREE.Box3().setFromObject(root);
+    const center = new THREE.Vector3();
+    box.getCenter(center);
+    return center;
+  }, [root]);
+
+  const headerMap = useCanvasTexture(
+    () => createHeaderCanvas(profile),
+    [profile.name, profile.school, profile.faculty, profile.classOf],
   );
+  const highlightMap = useCanvasTexture(() => createHighlightCanvas(), []);
+
+  const handlePointerDown = (event: ThreeEvent<PointerEvent>) => {
+    if (!signMode) return;
+    const target = event.object;
+    if (!(target instanceof THREE.Mesh) || !SIGNABLE.has(target.name)) return;
+    if (!event.face) return;
+
+    event.stopPropagation();
+
+    const mesh = shirtMesh ?? target;
+    const localPoint = mesh.worldToLocal(event.point.clone());
+
+    const normalMatrix = new THREE.Matrix3().getNormalMatrix(target.matrixWorld);
+    const worldNormal = event.face.normal
+      .clone()
+      .applyMatrix3(normalMatrix)
+      .normalize();
+
+    const inv = new THREE.Matrix4().copy(mesh.matrixWorld).invert();
+    const localNormal = worldNormal.clone().transformDirection(inv).normalize();
+
+    const side: ShirtSide = worldNormal.z >= 0 ? "front" : "back";
+
+    onHit({
+      side,
+      position: [localPoint.x, localPoint.y, localPoint.z],
+      normal: [localNormal.x, localNormal.y, localNormal.z],
+    });
+  };
+
+  // Ink lives in shirt-mesh local space
+  const inkParentPosition = shirtMesh
+    ? ([shirtMesh.position.x, shirtMesh.position.y, shirtMesh.position.z] as Vec3)
+    : ([0, 0, 0] as Vec3);
 
   return (
-    <group ref={group} scale={1.35} position={[0, 0.05, 0]}>
-      {/* Cap accent */}
-      <group position={[0, 1.05, 0]} rotation={[0.1, 0.2, -0.05]}>
-        <mesh position={[0, 0.02, 0]} castShadow>
-          <cylinderGeometry args={[0.22, 0.24, 0.08, 32]} />
-          <meshStandardMaterial color="#0a1628" roughness={0.55} />
-        </mesh>
-        <mesh position={[0, 0.07, 0]} castShadow>
-          <boxGeometry args={[0.55, 0.02, 0.55]} />
-          <meshStandardMaterial color="#0a1628" roughness={0.5} />
-        </mesh>
-        <mesh position={[0.28, 0.05, 0]} rotation={[0, 0, -0.4]}>
-          <cylinderGeometry args={[0.012, 0.012, 0.35, 8]} />
-          <meshStandardMaterial color="#b8952a" metalness={0.6} roughness={0.3} />
-        </mesh>
-      </group>
-
-      <mesh
-        geometry={geometry}
-        castShadow
-        receiveShadow
+    <group
+      position={[
+        -centerOffset.x,
+        -centerOffset.y - 0.02,
+        -centerOffset.z,
+      ]}
+    >
+      <primitive
+        object={root}
         onPointerDown={handlePointerDown}
-        onPointerOver={(e) => {
-          if (signMode) {
+        onPointerOver={(e: ThreeEvent<PointerEvent>) => {
+          if (!signMode) return;
+          if (e.object instanceof THREE.Mesh && SIGNABLE.has(e.object.name)) {
             e.stopPropagation();
             document.body.style.cursor = "crosshair";
           }
@@ -181,41 +332,35 @@ function ShirtMesh({
         onPointerOut={() => {
           document.body.style.cursor = "auto";
         }}
-      >
-        {/* ExtrudeGeometry groups: 0 = sides, 1 = +Z lid (front), 2 = −Z bottom (back) */}
-        <meshStandardMaterial
-          attach="material-0"
-          color="#ebe6dc"
-          roughness={0.9}
-          metalness={0}
-        />
-        <meshStandardMaterial
-          ref={frontMat}
-          attach="material-1"
-          map={frontMap ?? undefined}
-          color={frontMap ? "#ffffff" : "#f7f5f1"}
-          roughness={0.85}
-          metalness={0.02}
-        />
-        <meshStandardMaterial
-          ref={backMat}
-          attach="material-2"
-          map={backMap ?? undefined}
-          color={backMap ? "#ffffff" : "#f0ebe3"}
-          roughness={0.85}
-          metalness={0.02}
-        />
-      </mesh>
+      />
 
-      {/* Soft mannequin stand */}
-      <RoundedBox
-        args={[0.35, 0.12, 0.35]}
-        radius={0.04}
-        position={[0, -1.15, 0]}
-        receiveShadow
-      >
-        <meshStandardMaterial color="#d9d2c5" roughness={0.7} />
-      </RoundedBox>
+      <group position={inkParentPosition}>
+        {headerMap ? (
+          <SurfaceInk
+            position={[0, 1.05, 0.2]}
+            normal={[0, 0.05, 1]}
+            width={0.62}
+            height={0.32}
+            map={headerMap}
+            renderOrder={1}
+          />
+        ) : null}
+
+        {signatures.map((sig) =>
+          sig.imageData ? <SignatureInk key={sig.id} signature={sig} /> : null,
+        )}
+
+        {pendingHit && highlightMap ? (
+          <SurfaceInk
+            position={pendingHit.position}
+            normal={pendingHit.normal}
+            width={0.16}
+            height={0.16}
+            map={highlightMap}
+            renderOrder={3}
+          />
+        ) : null}
+      </group>
     </group>
   );
 }
@@ -223,7 +368,7 @@ function ShirtMesh({
 function CameraRig() {
   const { camera } = useThree();
   useEffect(() => {
-    camera.position.set(0, 0.2, 3.2);
+    camera.position.set(0.4, 0.12, 2.75);
   }, [camera]);
   return null;
 }
@@ -234,7 +379,6 @@ export type ShirtViewerProps = {
   signMode?: boolean;
   pendingHit?: HitPayload | null;
   onHit?: (hit: HitPayload) => void;
-  autoRotate?: boolean;
   className?: string;
   hint?: string;
 };
@@ -245,62 +389,72 @@ export default function ShirtViewer({
   signMode = false,
   pendingHit = null,
   onHit = () => undefined,
-  autoRotate = false,
   className = "",
   hint,
 }: ShirtViewerProps) {
   return (
-    <div className={`relative h-full w-full ${className}`}>
+    <div
+      className={`relative h-full w-full ${className}`}
+      style={{
+        background:
+          "radial-gradient(ellipse 70% 55% at 50% 42%, rgba(184,149,42,0.16), transparent 60%), radial-gradient(ellipse 45% 40% at 28% 28%, rgba(139,92,246,0.09), transparent 55%), #f4f0e8",
+      }}
+    >
       <Canvas
         shadows
         dpr={[1, 1.75]}
-        gl={{ antialias: true, alpha: true }}
-        camera={{ fov: 40, near: 0.1, far: 50 }}
+        gl={{
+          antialias: true,
+          alpha: true,
+          toneMapping: THREE.ACESFilmicToneMapping,
+        }}
+        camera={{ fov: 35, near: 0.1, far: 50 }}
       >
-        <color attach="background" args={["transparent"]} />
-        <ambientLight intensity={0.65} />
+        <ambientLight intensity={0.8} />
         <directionalLight
           castShadow
-          position={[3, 5, 4]}
-          intensity={1.35}
+          position={[3.2, 5.2, 3.8]}
+          intensity={1.65}
           shadow-mapSize={[1024, 1024]}
         />
-        <directionalLight position={[-3, 2, -2]} intensity={0.35} />
+        <directionalLight position={[-2.8, 1.8, -2.2]} intensity={0.4} />
+        <hemisphereLight args={["#fffaf0", "#cfc9c0", 0.45]} />
         <Suspense fallback={null}>
           <CameraRig />
-          <ShirtMesh
+          <GraduationShirtModel
             profile={profile}
             signatures={signatures}
             signMode={signMode}
             pendingHit={pendingHit}
             onHit={onHit}
-            autoRotate={autoRotate}
           />
           <ContactShadows
-            position={[0, -1.2, 0]}
-            opacity={0.35}
-            scale={8}
-            blur={2.5}
-            far={4}
+            position={[0, -1.08, 0]}
+            opacity={0.32}
+            scale={6}
+            blur={2.8}
+            far={3}
           />
-          <Environment preset="city" environmentIntensity={0.35} />
+          <Environment preset="studio" environmentIntensity={0.5} />
         </Suspense>
         <OrbitControls
           enablePan={false}
-          minDistance={2.2}
-          maxDistance={5}
-          minPolarAngle={Math.PI / 4}
+          minDistance={1.9}
+          maxDistance={4}
+          minPolarAngle={Math.PI / 3.5}
           maxPolarAngle={Math.PI / 1.7}
           enabled={!signMode}
-          autoRotate={false}
+          target={[0, 0.02, 0]}
         />
       </Canvas>
 
       {hint ? (
-        <p className="pointer-events-none absolute bottom-4 left-1/2 z-10 -translate-x-1/2 rounded-full bg-ink/80 px-4 py-2 text-center text-xs font-medium text-cloth backdrop-blur">
+        <p className="pointer-events-none absolute bottom-4 left-1/2 z-10 max-w-[90%] -translate-x-1/2 rounded-full bg-ink/85 px-4 py-2 text-center text-xs font-medium text-cloth backdrop-blur">
           {hint}
         </p>
       ) : null}
     </div>
   );
 }
+
+useGLTF.preload(SHIRT_MODEL_URL);
