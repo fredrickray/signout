@@ -1,7 +1,7 @@
 import type { ShirtSignature } from "./types";
 import { DEMO_GRADUATE } from "./types";
 
-const storageKey = (slug: string) => `signout:signatures:v3:${slug}`;
+const storageKey = (slug: string) => `signout:signatures:v4:${slug}`;
 
 /** Seed placements in Continuous_cotton_shirt local space (model has no UVs). */
 const SEED_SIGNATURES: ShirtSignature[] = [
@@ -72,13 +72,77 @@ const SEED_SIGNATURES: ShirtSignature[] = [
   },
 ];
 
-function createTextSignatureImage(
-  text: string,
+function loadImage(src: string): Promise<HTMLImageElement> {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => resolve(img);
+    img.onerror = reject;
+    img.src = src;
+  });
+}
+
+/** Name on top, drawn signature underneath — what gets stamped on the shirt. */
+export async function composeNamedSignatureImage(opts: {
+  name: string;
+  message?: string;
+  inkDataUrl: string;
+  color: string;
+}): Promise<string> {
+  const width = 720;
+  const height = 420;
+  const canvas = document.createElement("canvas");
+  canvas.width = width;
+  canvas.height = height;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return opts.inkDataUrl;
+
+  ctx.clearRect(0, 0, width, height);
+  ctx.textAlign = "center";
+
+  // Name (top)
+  ctx.fillStyle = opts.color;
+  ctx.font = "700 52px Georgia, 'Times New Roman', serif";
+  ctx.textBaseline = "top";
+  ctx.fillText(opts.name, width / 2, 28);
+
+  // Optional short message under name
+  let inkTop = 96;
+  if (opts.message?.trim()) {
+    ctx.font = "italic 34px Caveat, 'Segoe Script', cursive";
+    ctx.fillStyle = opts.color;
+    ctx.globalAlpha = 0.9;
+    ctx.fillText(opts.message.trim(), width / 2, 88);
+    ctx.globalAlpha = 1;
+    inkTop = 140;
+  }
+
+  // Drawn signature under the name
+  try {
+    const img = await loadImage(opts.inkDataUrl);
+    const maxW = width - 80;
+    const maxH = height - inkTop - 36;
+    const scale = Math.min(maxW / img.width, maxH / img.height, 1.35);
+    const w = img.width * scale;
+    const h = img.height * scale;
+    const x = (width - w) / 2;
+    const y = inkTop + (maxH - h) / 2;
+    ctx.drawImage(img, x, y, w, h);
+  } catch {
+    // fall through — still keep name on canvas
+  }
+
+  return canvas.toDataURL("image/png");
+}
+
+/** Seed stickers: name on top, message as the “signature” line under it. */
+function createNamedSeedImage(
+  name: string,
+  message: string,
   color: string,
-  width = 640,
-  height = 280,
 ): string {
   if (typeof document === "undefined") return "";
+  const width = 720;
+  const height = 360;
   const canvas = document.createElement("canvas");
   canvas.width = width;
   canvas.height = height;
@@ -86,18 +150,20 @@ function createTextSignatureImage(
   if (!ctx) return "";
 
   ctx.clearRect(0, 0, width, height);
-  ctx.fillStyle = color;
   ctx.textAlign = "center";
+  ctx.fillStyle = color;
+
+  ctx.font = "700 48px Georgia, 'Times New Roman', serif";
+  ctx.textBaseline = "top";
+  ctx.fillText(name, width / 2, 36);
+
+  ctx.font = "italic 44px Caveat, 'Segoe Script', cursive";
   ctx.textBaseline = "middle";
-  ctx.font = "italic 64px Caveat, 'Segoe Script', 'Apple Chancery', cursive";
 
-  const words = text.split(" ");
+  const words = message.split(" ");
   let line = "";
-  let y = height / 2 - 28;
-  const lineHeight = 68;
-  const maxWidth = width - 48;
   const lines: string[] = [];
-
+  const maxWidth = width - 80;
   for (const word of words) {
     const test = line ? `${line} ${word}` : word;
     if (ctx.measureText(test).width > maxWidth && line) {
@@ -108,7 +174,10 @@ function createTextSignatureImage(
     }
   }
   if (line) lines.push(line);
-  lines.forEach((l, i) => ctx.fillText(l, width / 2, y + i * lineHeight));
+
+  const startY = 200 - ((lines.length - 1) * 48) / 2;
+  lines.forEach((l, i) => ctx.fillText(l, width / 2, startY + i * 48));
+
   return canvas.toDataURL("image/png");
 }
 
@@ -117,7 +186,7 @@ export function getSeedSignatures(): ShirtSignature[] {
     ...sig,
     imageData:
       sig.imageData ||
-      createTextSignatureImage(sig.message || sig.name, sig.color),
+      createNamedSeedImage(sig.name, sig.message || sig.name, sig.color),
   }));
 }
 
@@ -138,7 +207,11 @@ function hydrateSignatures(list: ShirtSignature[]): ShirtSignature[] {
     if (sig.imageData) return sig;
     return {
       ...sig,
-      imageData: createTextSignatureImage(sig.message || sig.name, sig.color),
+      imageData: createNamedSeedImage(
+        sig.name,
+        sig.message || sig.name,
+        sig.color,
+      ),
     };
   });
 }
