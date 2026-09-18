@@ -7,7 +7,7 @@ import {
   useMemo,
   useState,
 } from "react";
-import { Canvas, ThreeEvent, useThree } from "@react-three/fiber";
+import { Canvas, ThreeEvent, createPortal, useThree } from "@react-three/fiber";
 import {
   ContactShadows,
   Environment,
@@ -16,13 +16,13 @@ import {
   useTexture,
 } from "@react-three/drei";
 import * as THREE from "three";
-import type {
-  GraduateProfile,
-  ShirtSide,
-  ShirtSignature,
-  Vec3,
+import {
+  SHIRT_MODEL_URL,
+  type GraduateProfile,
+  type ShirtSide,
+  type ShirtSignature,
+  type Vec3,
 } from "@/lib/types";
-import { SHIRT_MODEL_URL } from "@/lib/types";
 
 export type HitPayload = {
   side: ShirtSide;
@@ -31,6 +31,7 @@ export type HitPayload = {
 };
 
 type ShirtMeshProps = {
+  modelUrl: string;
   profile: GraduateProfile;
   signatures: ShirtSignature[];
   signMode: boolean;
@@ -38,11 +39,11 @@ type ShirtMeshProps = {
   onHit: (hit: HitPayload) => void;
 };
 
-const SIGNABLE = new Set([
-  "Continuous_cotton_shirt",
-  "Bottom_hem",
-  "Crew_neck_ribbing",
-]);
+const DECORATIVE = /cap|tassel|gold|mortar|button|piping|strand|clasp|cord/i;
+
+function isSignableMesh(name: string) {
+  return !DECORATIVE.test(name);
+}
 
 /** DecalGeometry crashes without a proper index — prepare meshes safely. */
 function prepareMeshGeometry(mesh: THREE.Mesh) {
@@ -164,8 +165,9 @@ function SurfaceInk({
   // Nudge along the normal so ink sits on top of the fabric
   const lifted = useMemo(() => {
     const n = new THREE.Vector3(...normal).normalize();
-    return new THREE.Vector3(...position).addScaledVector(n, 0.004);
-  }, [position, normal]);
+    const lift = Math.max(width, height) * 0.025;
+    return new THREE.Vector3(...position).addScaledVector(n, lift);
+  }, [position, normal, width, height]);
 
   return (
     <mesh
@@ -189,14 +191,20 @@ function SurfaceInk({
   );
 }
 
-function SignatureInk({ signature }: { signature: ShirtSignature }) {
+function SignatureInk({
+  signature,
+  width,
+}: {
+  signature: ShirtSignature;
+  width: number;
+}) {
   const map = useTexture(signature.imageData);
   useLayoutEffect(() => {
     map.colorSpace = THREE.SRGBColorSpace;
     map.needsUpdate = true;
   }, [map]);
 
-  const w = 0.3 * signature.scale;
+  const w = width * signature.scale;
   return (
     <SurfaceInk
       position={signature.position}
@@ -209,60 +217,123 @@ function SignatureInk({ signature }: { signature: ShirtSignature }) {
   );
 }
 
+const TARGET_MODEL_HEIGHT = 2.2;
+
 function GraduationShirtModel({
+  modelUrl,
   profile,
   signatures,
   signMode,
   pendingHit,
   onHit,
 }: ShirtMeshProps) {
-  const { scene } = useGLTF(SHIRT_MODEL_URL);
+  const { scene } = useGLTF(modelUrl);
 
-  const { root, shirtMesh } = useMemo((): {
-    root: THREE.Group | THREE.Object3D;
-    shirtMesh: THREE.Mesh | null;
-  } => {
-    const cloned = scene.clone(true);
-    let shirt: THREE.Mesh | null = null;
+  const { root, shirtMesh, headerAnchor, signatureWidth, highlightSize } =
+    useMemo((): {
+      root: THREE.Group | THREE.Object3D;
+      shirtMesh: THREE.Mesh | null;
+      headerAnchor: {
+        position: Vec3;
+        normal: Vec3;
+        width: number;
+        height: number;
+      };
+      signatureWidth: number;
+      highlightSize: number;
+    } => {
+      const cloned = scene.clone(true);
+      let largest: THREE.Mesh | null = null;
+      let largestCount = 0;
 
-    const polishMaterial = (mat: THREE.Material, meshName: string) => {
-      if (!(mat instanceof THREE.MeshStandardMaterial)) return mat;
-      const m = mat.clone();
-      const name = (m.name || "").toLowerCase();
-      if (name.includes("cotton") || SIGNABLE.has(meshName)) {
-        m.color.set("#f7f4ef");
-        m.roughness = 0.9;
-        m.metalness = 0;
-        m.envMapIntensity = 0.5;
+      const polishMaterial = (mat: THREE.Material) => {
+        if (!(mat instanceof THREE.MeshStandardMaterial)) return mat;
+        const m = mat.clone();
+        // Keep textured models (e.g. rolled sleeves); only tint blank fabric.
+        if (!m.map) {
+          const name = (m.name || "").toLowerCase();
+          if (name.includes("gold")) {
+            m.metalness = 0.75;
+            m.roughness = 0.26;
+            m.envMapIntensity = 1.15;
+          } else if (name.includes("cap") || name.includes("black")) {
+            m.color.set("#17191f");
+            m.roughness = 0.52;
+          } else {
+            m.color.set("#f7f4ef");
+            m.roughness = 0.9;
+            m.metalness = 0;
+            m.envMapIntensity = 0.5;
+          }
+        }
+        m.needsUpdate = true;
+        return m;
+      };
+
+      cloned.traverse((obj) => {
+        if (!(obj instanceof THREE.Mesh)) return;
+        prepareMeshGeometry(obj);
+        obj.castShadow = true;
+        obj.receiveShadow = true;
+
+        const count = obj.geometry.attributes.position?.count ?? 0;
+        if (isSignableMesh(obj.name) && count > largestCount) {
+          largest = obj;
+          largestCount = count;
+        }
+
+        obj.material = Array.isArray(obj.material)
+          ? obj.material.map((m) => polishMaterial(m))
+          : polishMaterial(obj.material);
+      });
+
+      // Normalize wildly different export units (cm vs meters) to a shared height.
+      const rawBox = new THREE.Box3().setFromObject(cloned);
+      const rawSize = new THREE.Vector3();
+      rawBox.getSize(rawSize);
+      const fit = rawSize.y > 0 ? TARGET_MODEL_HEIGHT / rawSize.y : 1;
+      cloned.scale.setScalar(fit);
+
+      const mesh = largest;
+      let headerAnchor = {
+        position: [0, 0.85, 0.18] as Vec3,
+        normal: [0, 0.05, 1] as Vec3,
+        width: 0.62 / fit,
+        height: 0.32 / fit,
+      };
+      let signatureWidth = 0.3 / fit;
+      let highlightSize = 0.16 / fit;
+
+      if (mesh?.geometry) {
+        if (!mesh.geometry.boundingBox) mesh.geometry.computeBoundingBox();
+        const bb = mesh.geometry.boundingBox;
+        if (bb) {
+          const h = bb.max.y - bb.min.y;
+          const d = bb.max.z - bb.min.z;
+          const w = bb.max.x - bb.min.x;
+          headerAnchor = {
+            position: [
+              (bb.min.x + bb.max.x) / 2,
+              bb.min.y + h * 0.78,
+              bb.max.z - d * 0.08,
+            ],
+            normal: [0, 0.04, 1],
+            width: w * 0.42,
+            height: h * 0.16,
+          };
+          signatureWidth = w * 0.18;
+          highlightSize = w * 0.1;
+        }
       }
-      if (name.includes("gold")) {
-        m.metalness = 0.75;
-        m.roughness = 0.26;
-        m.envMapIntensity = 1.15;
-      }
-      if (name.includes("cap") || name.includes("black")) {
-        m.color.set("#17191f");
-        m.roughness = 0.52;
-      }
-      m.needsUpdate = true;
-      return m;
-    };
 
-    cloned.traverse((obj) => {
-      if (!(obj instanceof THREE.Mesh)) return;
-      prepareMeshGeometry(obj);
-      obj.castShadow = true;
-      obj.receiveShadow = true;
-
-      if (obj.name === "Continuous_cotton_shirt") shirt = obj;
-
-      obj.material = Array.isArray(obj.material)
-        ? obj.material.map((m) => polishMaterial(m, obj.name))
-        : polishMaterial(obj.material, obj.name);
-    });
-
-    return { root: cloned, shirtMesh: shirt };
-  }, [scene]);
+      return {
+        root: cloned,
+        shirtMesh: mesh,
+        headerAnchor,
+        signatureWidth,
+        highlightSize,
+      };
+    }, [scene]);
 
   const centerOffset = useMemo(() => {
     const box = new THREE.Box3().setFromObject(root);
@@ -280,7 +351,7 @@ function GraduationShirtModel({
   const handlePointerDown = (event: ThreeEvent<PointerEvent>) => {
     if (!signMode) return;
     const target = event.object;
-    if (!(target instanceof THREE.Mesh) || !SIGNABLE.has(target.name)) return;
+    if (!(target instanceof THREE.Mesh) || !isSignableMesh(target.name)) return;
     if (!event.face) return;
 
     event.stopPropagation();
@@ -306,10 +377,41 @@ function GraduationShirtModel({
     });
   };
 
-  // Ink lives in shirt-mesh local space
-  const inkParentPosition = shirtMesh
-    ? ([shirtMesh.position.x, shirtMesh.position.y, shirtMesh.position.z] as Vec3)
-    : ([0, 0, 0] as Vec3);
+  const ink = (
+    <>
+      {headerMap ? (
+        <SurfaceInk
+          position={headerAnchor.position}
+          normal={headerAnchor.normal}
+          width={headerAnchor.width}
+          height={headerAnchor.height}
+          map={headerMap}
+          renderOrder={1}
+        />
+      ) : null}
+
+      {signatures.map((sig) =>
+        sig.imageData ? (
+          <SignatureInk
+            key={sig.id}
+            signature={sig}
+            width={signatureWidth}
+          />
+        ) : null,
+      )}
+
+      {pendingHit && highlightMap ? (
+        <SurfaceInk
+          position={pendingHit.position}
+          normal={pendingHit.normal}
+          width={highlightSize}
+          height={highlightSize}
+          map={highlightMap}
+          renderOrder={3}
+        />
+      ) : null}
+    </>
+  );
 
   return (
     <group
@@ -324,7 +426,7 @@ function GraduationShirtModel({
         onPointerDown={handlePointerDown}
         onPointerOver={(e: ThreeEvent<PointerEvent>) => {
           if (!signMode) return;
-          if (e.object instanceof THREE.Mesh && SIGNABLE.has(e.object.name)) {
+          if (e.object instanceof THREE.Mesh && isSignableMesh(e.object.name)) {
             e.stopPropagation();
             document.body.style.cursor = "crosshair";
           }
@@ -334,33 +436,7 @@ function GraduationShirtModel({
         }}
       />
 
-      <group position={inkParentPosition}>
-        {headerMap ? (
-          <SurfaceInk
-            position={[0, 1.05, 0.2]}
-            normal={[0, 0.05, 1]}
-            width={0.62}
-            height={0.32}
-            map={headerMap}
-            renderOrder={1}
-          />
-        ) : null}
-
-        {signatures.map((sig) =>
-          sig.imageData ? <SignatureInk key={sig.id} signature={sig} /> : null,
-        )}
-
-        {pendingHit && highlightMap ? (
-          <SurfaceInk
-            position={pendingHit.position}
-            normal={pendingHit.normal}
-            width={0.16}
-            height={0.16}
-            map={highlightMap}
-            renderOrder={3}
-          />
-        ) : null}
-      </group>
+      {shirtMesh ? createPortal(ink, shirtMesh) : <group>{ink}</group>}
     </group>
   );
 }
@@ -376,6 +452,7 @@ function CameraRig() {
 export type ShirtViewerProps = {
   profile: GraduateProfile;
   signatures: ShirtSignature[];
+  modelUrl?: string;
   signMode?: boolean;
   pendingHit?: HitPayload | null;
   onHit?: (hit: HitPayload) => void;
@@ -386,6 +463,7 @@ export type ShirtViewerProps = {
 export default function ShirtViewer({
   profile,
   signatures,
+  modelUrl = SHIRT_MODEL_URL,
   signMode = false,
   pendingHit = null,
   onHit = () => undefined,
@@ -397,7 +475,7 @@ export default function ShirtViewer({
       className={`relative h-full w-full ${className}`}
       style={{
         background:
-          "radial-gradient(ellipse 70% 55% at 50% 42%, rgba(184,149,42,0.16), transparent 60%), radial-gradient(ellipse 45% 40% at 28% 28%, rgba(139,92,246,0.09), transparent 55%), #f4f0e8",
+          "radial-gradient(ellipse 70% 55% at 50% 42%, rgba(184,149,42,0.16), transparent 60%), radial-gradient(ellipse 45% 40% at 28% 28%, rgba(5,150,105,0.08), transparent 55%), #f4f0e8",
       }}
     >
       <Canvas
@@ -422,6 +500,8 @@ export default function ShirtViewer({
         <Suspense fallback={null}>
           <CameraRig />
           <GraduationShirtModel
+            key={modelUrl}
+            modelUrl={modelUrl}
             profile={profile}
             signatures={signatures}
             signMode={signMode}
@@ -458,3 +538,7 @@ export default function ShirtViewer({
 }
 
 useGLTF.preload(SHIRT_MODEL_URL);
+useGLTF.preload("/models/rolled-sleeves.glb");
+useGLTF.preload("/models/shirt-clo.glb");
+useGLTF.preload("/models/mens-shirt.glb");
+useGLTF.preload("/models/hood-down.glb");

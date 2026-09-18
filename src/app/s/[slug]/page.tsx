@@ -2,10 +2,11 @@
 
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
+import { FormEvent, useCallback, useEffect, useState } from "react";
 import { Gift, PenLine, Share2, X } from "lucide-react";
 import ShirtViewerLazy from "@/components/shirt/ShirtViewerLazy";
 import SignaturePad from "@/components/shirt/SignaturePad";
+import { ApiError, getCelebration } from "@/lib/api";
 import {
   addSignature,
   composeNamedSignatureImage,
@@ -13,6 +14,7 @@ import {
 } from "@/lib/signatures";
 import {
   DEMO_GRADUATE,
+  SHIRT_MODEL_URL,
   SIGNATURE_COLORS,
   type GraduateProfile,
   type ShirtSide,
@@ -25,23 +27,13 @@ type Hit = {
   normal: [number, number, number];
 };
 
-function profileForSlug(slug: string): GraduateProfile {
-  if (slug === DEMO_GRADUATE.slug) return DEMO_GRADUATE;
-  return {
-    slug,
-    name: slug.charAt(0).toUpperCase() + slug.slice(1),
-    school: "Your University",
-    faculty: "Faculty",
-    classOf: "Class of 2026",
-    celebration: "graduation",
-  };
-}
-
 export default function ShareSignPage() {
   const params = useParams<{ slug: string }>();
   const slug = params.slug;
-  const profile = useMemo(() => profileForSlug(slug), [slug]);
 
+  const [profile, setProfile] = useState<GraduateProfile | null>(null);
+  const [modelUrl, setModelUrl] = useState(SHIRT_MODEL_URL);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [signatures, setSignatures] = useState<ShirtSignature[]>([]);
   const [signMode, setSignMode] = useState(false);
   const [pendingHit, setPendingHit] = useState<Hit | null>(null);
@@ -53,8 +45,50 @@ export default function ShareSignPage() {
   const [ready, setReady] = useState(false);
 
   useEffect(() => {
-    setSignatures(loadSignatures(slug));
-    setReady(true);
+    let cancelled = false;
+
+    async function load() {
+      setReady(false);
+      setLoadError(null);
+
+      try {
+        const celeb = await getCelebration(slug);
+        if (cancelled) return;
+        setProfile({
+          slug: celeb.slug,
+          name: celeb.display_name,
+          school: celeb.school,
+          faculty: celeb.faculty,
+          classOf: celeb.class_of,
+          celebration:
+            celeb.celebration_type === "nysc" ? "nysc" : "graduation",
+          modelUrl: celeb.shirt?.model_url,
+        });
+        setModelUrl(celeb.shirt?.model_url || SHIRT_MODEL_URL);
+      } catch (err) {
+        if (cancelled) return;
+        if (slug === DEMO_GRADUATE.slug) {
+          setProfile(DEMO_GRADUATE);
+          setModelUrl(SHIRT_MODEL_URL);
+        } else if (err instanceof ApiError && err.status === 404) {
+          setLoadError("This celebration page was not found.");
+        } else {
+          setLoadError(
+            err instanceof Error ? err.message : "Failed to load page",
+          );
+        }
+      }
+
+      if (!cancelled) {
+        setSignatures(loadSignatures(slug));
+        setReady(true);
+      }
+    }
+
+    void load();
+    return () => {
+      cancelled = true;
+    };
   }, [slug]);
 
   const onHit = useCallback((hit: Hit) => {
@@ -111,6 +145,25 @@ export default function ShareSignPage() {
       : "Tap a spot on the shirt to place your signature"
     : "Drag to rotate · Front & back";
 
+  if (loadError && !profile) {
+    return (
+      <div className="flex min-h-screen flex-col items-center justify-center gap-4 bg-parchment px-4 text-center">
+        <p className="text-muted">{loadError}</p>
+        <Link href="/" className="btn-primary">
+          Go home
+        </Link>
+      </div>
+    );
+  }
+
+  if (!ready || !profile) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-parchment text-muted">
+        Loading shirt…
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-parchment">
       <header className="flex items-center justify-between px-4 py-4 md:px-8">
@@ -162,16 +215,15 @@ export default function ShareSignPage() {
         </div>
 
         <div className="relative aspect-[4/5] w-full overflow-hidden rounded-[2rem] border border-line bg-gradient-to-b from-cloth to-parchment shadow-[var(--shadow)] sm:aspect-[16/12]">
-          {ready ? (
-            <ShirtViewerLazy
-              profile={profile}
-              signatures={signatures}
-              signMode={signMode}
-              pendingHit={pendingHit}
-              onHit={onHit}
-              hint={hint}
-            />
-          ) : null}
+          <ShirtViewerLazy
+            profile={profile}
+            signatures={signatures}
+            modelUrl={modelUrl}
+            signMode={signMode}
+            pendingHit={pendingHit}
+            onHit={onHit}
+            hint={hint}
+          />
         </div>
 
         <section className="rounded-[1.5rem] border border-teal/20 bg-teal/5 px-6 py-8 text-center">

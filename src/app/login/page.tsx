@@ -40,7 +40,7 @@ function AuthForm() {
             });
 
       saveSession(result.user, result.tokens);
-      router.push("/dashboard");
+      router.push(tab === "create" ? "/create" : "/dashboard");
     } catch (err) {
       if (err instanceof ApiError) {
         setError(err.message);
