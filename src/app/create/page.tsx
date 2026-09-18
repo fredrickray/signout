@@ -218,7 +218,7 @@ export default function CreateCelebrationPage() {
                 value={displayName}
                 onChange={(e) => setDisplayName(e.target.value)}
                 className="mt-1.5 w-full rounded-2xl border border-line bg-white px-4 py-3 outline-none ring-green focus:ring-2"
-                placeholder="e.g. Laetitia"
+                placeholder="e.g. Amaka"
               />
             </label>
 
@@ -234,7 +234,7 @@ export default function CreateCelebrationPage() {
                   value={school}
                   onChange={(e) => setSchool(e.target.value)}
                   className="mt-1.5 w-full rounded-2xl border border-line bg-white px-4 py-3 outline-none ring-green focus:ring-2"
-                  placeholder="e.g. Veritas University, Abuja"
+                  placeholder="e.g. Veritas University"
                 />
               </label>
 
@@ -273,7 +273,7 @@ export default function CreateCelebrationPage() {
                     setSlug(slugify(e.target.value));
                   }}
                   className="w-full outline-none"
-                  placeholder="laetitia"
+                  placeholder="amaka"
                   minLength={3}
                   maxLength={48}
                   pattern="[a-z0-9]+(?:-[a-z0-9]+)*"

@@ -60,9 +60,9 @@ export type CelebrationPublic = {
 };
 
 export const DEMO_GRADUATE: GraduateProfile = {
-  slug: "laetitia",
-  name: "Laetitia",
-  school: "Veritas University, Abuja",
+  slug: "amaka",
+  name: "Amaka",
+  school: "Veritas University",
   faculty: "Computer Science",
   classOf: "Class of 2026",
   celebration: "graduation",
