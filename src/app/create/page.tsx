@@ -203,7 +203,13 @@ export default function CreateCelebrationPage() {
           </div>
 
           <div className="space-y-4 rounded-[1.5rem] border border-line bg-white p-6">
-            <h2 className="font-display text-2xl text-ink">Your details</h2>
+            <div>
+              <h2 className="font-display text-2xl text-ink">Your details</h2>
+              <p className="mt-1 text-sm text-muted">
+                Only the name is printed on the shirt. School and class show on
+                the page beside it.
+              </p>
+            </div>
 
             <label className="block text-sm font-medium text-ink">
               Name on shirt
@@ -216,38 +222,44 @@ export default function CreateCelebrationPage() {
               />
             </label>
 
-            <label className="block text-sm font-medium text-ink">
-              School / institution
-              <input
-                required
-                value={school}
-                onChange={(e) => setSchool(e.target.value)}
-                className="mt-1.5 w-full rounded-2xl border border-line bg-white px-4 py-3 outline-none ring-green focus:ring-2"
-                placeholder="e.g. Veritas University, Abuja"
-              />
-            </label>
+            <div className="rounded-2xl border border-dashed border-line bg-surface/80 p-4 space-y-4">
+              <p className="text-xs font-semibold uppercase tracking-wider text-muted">
+                Shown on your page (not on the fabric)
+              </p>
 
-            <label className="block text-sm font-medium text-ink">
-              Faculty / department
-              <input
-                required
-                value={faculty}
-                onChange={(e) => setFaculty(e.target.value)}
-                className="mt-1.5 w-full rounded-2xl border border-line bg-white px-4 py-3 outline-none ring-green focus:ring-2"
-                placeholder="e.g. Computer Science"
-              />
-            </label>
+              <label className="block text-sm font-medium text-ink">
+                School / institution
+                <input
+                  required
+                  value={school}
+                  onChange={(e) => setSchool(e.target.value)}
+                  className="mt-1.5 w-full rounded-2xl border border-line bg-white px-4 py-3 outline-none ring-green focus:ring-2"
+                  placeholder="e.g. Veritas University, Abuja"
+                />
+              </label>
 
-            <label className="block text-sm font-medium text-ink">
-              Class / cohort
-              <input
-                required
-                value={classOf}
-                onChange={(e) => setClassOf(e.target.value)}
-                className="mt-1.5 w-full rounded-2xl border border-line bg-white px-4 py-3 outline-none ring-green focus:ring-2"
-                placeholder="Class of 2026"
-              />
-            </label>
+              <label className="block text-sm font-medium text-ink">
+                Faculty / department
+                <input
+                  required
+                  value={faculty}
+                  onChange={(e) => setFaculty(e.target.value)}
+                  className="mt-1.5 w-full rounded-2xl border border-line bg-white px-4 py-3 outline-none ring-green focus:ring-2"
+                  placeholder="e.g. Computer Science"
+                />
+              </label>
+
+              <label className="block text-sm font-medium text-ink">
+                Class / cohort
+                <input
+                  required
+                  value={classOf}
+                  onChange={(e) => setClassOf(e.target.value)}
+                  className="mt-1.5 w-full rounded-2xl border border-line bg-white px-4 py-3 outline-none ring-green focus:ring-2"
+                  placeholder="Class of 2026"
+                />
+              </label>
+            </div>
 
             <label className="block text-sm font-medium text-ink">
               Share link slug

@@ -214,16 +214,57 @@ export default function ShareSignPage() {
           ) : null}
         </div>
 
-        <div className="relative aspect-[4/5] w-full overflow-hidden rounded-[2rem] border border-line bg-gradient-to-b from-cloth to-parchment shadow-[var(--shadow)] sm:aspect-[16/12]">
-          <ShirtViewerLazy
-            profile={profile}
-            signatures={signatures}
-            modelUrl={modelUrl}
-            signMode={signMode}
-            pendingHit={pendingHit}
-            onHit={onHit}
-            hint={hint}
-          />
+        <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_280px] lg:items-stretch">
+          <div className="relative aspect-[4/5] w-full overflow-hidden rounded-[2rem] border border-line shadow-[var(--shadow)] sm:aspect-[16/12] lg:aspect-auto lg:min-h-[560px]">
+            <div className="absolute inset-0">
+              <ShirtViewerLazy
+                profile={profile}
+                signatures={signatures}
+                modelUrl={modelUrl}
+                signMode={signMode}
+                pendingHit={pendingHit}
+                onHit={onHit}
+                hint={hint}
+              />
+            </div>
+          </div>
+
+          <aside className="rounded-[1.5rem] border border-line bg-cloth p-6 shadow-sm">
+            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-teal">
+              {profile.celebration === "nysc" ? "NYSC" : "Graduation"}
+            </p>
+            <h1 className="mt-2 font-display text-3xl text-ink">
+              {profile.name}
+            </h1>
+            <p className="mt-1 text-sm text-muted">Name on the shirt</p>
+
+            <dl className="mt-6 space-y-4 border-t border-line pt-5">
+              <div>
+                <dt className="text-xs font-semibold uppercase tracking-wider text-muted">
+                  School
+                </dt>
+                <dd className="mt-1 text-sm font-medium text-ink">
+                  {profile.school}
+                </dd>
+              </div>
+              <div>
+                <dt className="text-xs font-semibold uppercase tracking-wider text-muted">
+                  Faculty
+                </dt>
+                <dd className="mt-1 text-sm font-medium text-ink">
+                  {profile.faculty}
+                </dd>
+              </div>
+              <div>
+                <dt className="text-xs font-semibold uppercase tracking-wider text-muted">
+                  Class
+                </dt>
+                <dd className="mt-1 text-sm font-medium text-ink">
+                  {profile.classOf}
+                </dd>
+              </div>
+            </dl>
+          </aside>
         </div>
 
         <section className="rounded-[1.5rem] border border-teal/20 bg-teal/5 px-6 py-8 text-center">
