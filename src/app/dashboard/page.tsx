@@ -146,7 +146,7 @@ export default function DashboardPage() {
 
         <div className="mt-10">
           <Link
-            href="/s/laetitia"
+            href="/s/amaka"
             className="text-sm font-semibold text-muted underline-offset-2 hover:text-ink hover:underline"
           >
             Try the demo shirt →
