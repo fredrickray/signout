@@ -57,32 +57,24 @@ function prepareMeshGeometry(mesh: THREE.Mesh) {
   }
 }
 
-function createHeaderCanvas(profile: GraduateProfile) {
+function createHeaderCanvas(name: string) {
   const canvas = document.createElement("canvas");
   canvas.width = 1024;
-  canvas.height = 512;
+  canvas.height = 320;
   const ctx = canvas.getContext("2d");
   if (!ctx) return canvas;
 
   ctx.clearRect(0, 0, canvas.width, canvas.height);
   ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
   ctx.fillStyle = "#0a1628";
-  ctx.font = "700 92px Georgia, serif";
-  ctx.fillText(profile.name, 512, 150);
-  ctx.font = "500 36px system-ui, sans-serif";
-  ctx.fillStyle = "#334155";
-  ctx.fillText(profile.school, 512, 220);
-  ctx.font = "400 30px system-ui, sans-serif";
-  ctx.fillStyle = "#64748b";
-  ctx.fillText(profile.faculty, 512, 270);
-  ctx.font = "700 56px Georgia, serif";
-  ctx.fillStyle = "#0a1628";
-  ctx.fillText(profile.classOf, 512, 350);
+  ctx.font = "700 110px Georgia, serif";
+  ctx.fillText(name, 512, 140);
   ctx.strokeStyle = "rgba(184, 149, 42, 0.7)";
   ctx.lineWidth = 3;
   ctx.beginPath();
-  ctx.moveTo(300, 390);
-  ctx.lineTo(724, 390);
+  ctx.moveTo(280, 230);
+  ctx.lineTo(744, 230);
   ctx.stroke();
   return canvas;
 }
@@ -298,8 +290,8 @@ function GraduationShirtModel({
       let headerAnchor = {
         position: [0, 0.85, 0.18] as Vec3,
         normal: [0, 0.05, 1] as Vec3,
-        width: 0.62 / fit,
-        height: 0.32 / fit,
+        width: 0.55 / fit,
+        height: 0.18 / fit,
       };
       let signatureWidth = 0.3 / fit;
       let highlightSize = 0.16 / fit;
@@ -318,8 +310,8 @@ function GraduationShirtModel({
               bb.max.z - d * 0.08,
             ],
             normal: [0, 0.04, 1],
-            width: w * 0.42,
-            height: h * 0.16,
+            width: w * 0.38,
+            height: h * 0.09,
           };
           signatureWidth = w * 0.18;
           highlightSize = w * 0.1;
@@ -343,8 +335,8 @@ function GraduationShirtModel({
   }, [root]);
 
   const headerMap = useCanvasTexture(
-    () => createHeaderCanvas(profile),
-    [profile.name, profile.school, profile.faculty, profile.classOf],
+    () => createHeaderCanvas(profile.name),
+    [profile.name],
   );
   const highlightMap = useCanvasTexture(() => createHighlightCanvas(), []);
 
