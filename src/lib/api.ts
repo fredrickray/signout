@@ -120,3 +120,72 @@ export function logout(refreshToken?: string | null) {
 export function me(accessToken: string) {
   return request<ApiUser>("/v1/auth/me", { method: "GET" }, accessToken);
 }
+
+export type ApiShirtTemplate = {
+  id: string;
+  slug: string;
+  name: string;
+  description: string;
+  category: string;
+  model_url: string;
+  preview_image: string;
+  active: boolean;
+  created_at: string;
+  updated_at: string;
+};
+
+export type ApiCelebration = {
+  id: string;
+  user_id: string;
+  slug: string;
+  display_name: string;
+  school: string;
+  faculty: string;
+  class_of: string;
+  celebration_type: string;
+  shirt_template_id: string;
+  created_at: string;
+  updated_at: string;
+  shirt: ApiShirtTemplate | null;
+};
+
+export function listShirts() {
+  return request<ApiShirtTemplate[]>("/v1/shirts", { method: "GET" });
+}
+
+export function getCelebration(slug: string) {
+  return request<ApiCelebration>(
+    `/v1/celebrations/${encodeURIComponent(slug)}`,
+    { method: "GET" },
+  );
+}
+
+export function listMyCelebrations(accessToken: string) {
+  return request<ApiCelebration[]>(
+    "/v1/celebrations",
+    { method: "GET" },
+    accessToken,
+  );
+}
+
+export function createCelebration(
+  accessToken: string,
+  input: {
+    slug: string;
+    display_name: string;
+    school: string;
+    faculty: string;
+    class_of: string;
+    celebration_type: "graduation" | "nysc";
+    shirt_template_id: string;
+  },
+) {
+  return request<ApiCelebration>(
+    "/v1/celebrations",
+    {
+      method: "POST",
+      body: JSON.stringify(input),
+    },
+    accessToken,
+  );
+}

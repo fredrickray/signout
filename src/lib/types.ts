@@ -27,6 +27,36 @@ export type GraduateProfile = {
   faculty: string;
   classOf: string;
   celebration: "graduation" | "nysc";
+  /** GLB path used by the share/sign page */
+  modelUrl?: string;
+};
+
+export type ShirtTemplate = {
+  id: string;
+  slug: string;
+  name: string;
+  description: string;
+  category: string;
+  model_url: string;
+  preview_image: string;
+  active: boolean;
+  created_at: string;
+  updated_at: string;
+};
+
+export type CelebrationPublic = {
+  id: string;
+  user_id: string;
+  slug: string;
+  display_name: string;
+  school: string;
+  faculty: string;
+  class_of: string;
+  celebration_type: "graduation" | "nysc" | string;
+  shirt_template_id: string;
+  created_at: string;
+  updated_at: string;
+  shirt: ShirtTemplate | null;
 };
 
 export const DEMO_GRADUATE: GraduateProfile = {
@@ -47,4 +77,4 @@ export const SIGNATURE_COLORS = [
   "#b8952a",
 ] as const;
 
-export const SHIRT_MODEL_URL = "/models/graduation-shirt.glb";
+export const SHIRT_MODEL_URL = "/models/shirtie.glb";
