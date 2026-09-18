@@ -363,8 +363,8 @@ function GraduationShirtModel({
           const w = bb.max.x - bb.min.x;
           nameWidth = w * 0.38;
           nameHeight = h * 0.09;
-          signatureWidth = w * 0.18;
-          highlightSize = w * 0.1;
+          signatureWidth = w * 0.1;
+          highlightSize = w * 0.06;
         }
       }
 
