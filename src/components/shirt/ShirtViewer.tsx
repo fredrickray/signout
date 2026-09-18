@@ -211,6 +211,69 @@ function SignatureInk({
 
 const TARGET_MODEL_HEIGHT = 2.2;
 
+/** Raycast the chest so the name sits on fabric like a signature sticker. */
+function findChestSurfaceHit(mesh: THREE.Mesh, root: THREE.Object3D) {
+  root.updateMatrixWorld(true);
+
+  const box = new THREE.Box3().setFromObject(root);
+  const size = new THREE.Vector3();
+  const center = new THREE.Vector3();
+  box.getSize(size);
+  box.getCenter(center);
+
+  const raycaster = new THREE.Raycaster();
+  const heights = [0.76, 0.7, 0.82, 0.64];
+  const xOffsets = [0, -0.06, 0.06, -0.12, 0.12];
+
+  type Hit = { position: Vec3; normal: Vec3; score: number };
+  let best: Hit | null = null;
+
+  for (const hy of heights) {
+    for (const xo of xOffsets) {
+      const x = center.x + size.x * xo;
+      const y = box.min.y + size.y * hy;
+      const origin = new THREE.Vector3(x, y, box.max.z + Math.max(size.z, 0.2) * 2);
+      const target = new THREE.Vector3(x, y, box.min.z - Math.max(size.z, 0.2));
+      const dir = target.clone().sub(origin).normalize();
+      raycaster.set(origin, dir);
+
+      const hits = raycaster.intersectObject(mesh, true);
+      for (const hit of hits) {
+        if (!hit.face) continue;
+
+        const worldNormal = hit.face.normal
+          .clone()
+          .transformDirection(hit.object.matrixWorld)
+          .normalize();
+        // Prefer front-facing fabric (toward the ray origin / +Z).
+        const facing = worldNormal.dot(dir.clone().multiplyScalar(-1));
+        if (facing < 0.2) continue;
+
+        const localPoint = mesh.worldToLocal(hit.point.clone());
+        const inv = new THREE.Matrix4().copy(mesh.matrixWorld).invert();
+        const localNormal = worldNormal
+          .clone()
+          .transformDirection(inv)
+          .normalize();
+
+        // Prefer hits near center chest.
+        const centerBias = 1 - Math.min(Math.abs(xo) * 2 + Math.abs(hy - 0.76), 1);
+        const score = facing * 2 + centerBias;
+        if (!best || score > best.score) {
+          best = {
+            position: [localPoint.x, localPoint.y, localPoint.z],
+            normal: [localNormal.x, localNormal.y, localNormal.z],
+            score,
+          };
+        }
+        break;
+      }
+    }
+  }
+
+  return best;
+}
+
 function GraduationShirtModel({
   modelUrl,
   profile,
@@ -287,36 +350,38 @@ function GraduationShirtModel({
       cloned.scale.setScalar(fit);
 
       const mesh = largest;
-      let headerAnchor = {
-        position: [0, 0.85, 0.18] as Vec3,
-        normal: [0, 0.05, 1] as Vec3,
-        width: 0.55 / fit,
-        height: 0.18 / fit,
-      };
       let signatureWidth = 0.3 / fit;
       let highlightSize = 0.16 / fit;
+      let nameWidth = 0.55 / fit;
+      let nameHeight = 0.18 / fit;
 
       if (mesh?.geometry) {
         if (!mesh.geometry.boundingBox) mesh.geometry.computeBoundingBox();
         const bb = mesh.geometry.boundingBox;
         if (bb) {
           const h = bb.max.y - bb.min.y;
-          const d = bb.max.z - bb.min.z;
           const w = bb.max.x - bb.min.x;
-          headerAnchor = {
-            position: [
-              (bb.min.x + bb.max.x) / 2,
-              bb.min.y + h * 0.78,
-              bb.max.z - d * 0.08,
-            ],
-            normal: [0, 0.04, 1],
-            width: w * 0.38,
-            height: h * 0.09,
-          };
+          nameWidth = w * 0.38;
+          nameHeight = h * 0.09;
           signatureWidth = w * 0.18;
           highlightSize = w * 0.1;
         }
       }
+
+      const surface = mesh ? findChestSurfaceHit(mesh, cloned) : null;
+      const headerAnchor = surface
+        ? {
+            position: surface.position,
+            normal: surface.normal,
+            width: nameWidth,
+            height: nameHeight,
+          }
+        : {
+            position: [0, 0.85 / fit, 0.18 / fit] as Vec3,
+            normal: [0, 0.05, 1] as Vec3,
+            width: nameWidth,
+            height: nameHeight,
+          };
 
       return {
         root: cloned,
